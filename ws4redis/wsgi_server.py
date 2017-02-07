@@ -120,9 +120,13 @@ class WebsocketWSGIServer(object):
                         if recvmsg:
                             subscriber.publish_message(recvmsg)
                     elif fd == redis_fd:
-                        sendmsg = RedisMessage(subscriber.parse_response())
-                        if sendmsg and (echo_message or sendmsg != recvmsg):
-                            websocket.send(sendmsg)
+                        while True:
+                            parsed_msg = subscriber.parse_response()
+                            if parsed_msg is None:
+                                break
+                            sendmsg = RedisMessage(parsed_msg)
+                            if sendmsg and (echo_message or sendmsg != recvmsg):
+                                websocket.send(sendmsg)
                     else:
                         logger.error('Invalid file descriptor: {0}'.format(fd))
                 # Check again that the websocket is closed before sending the heartbeat,

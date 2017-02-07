@@ -18,7 +18,7 @@ class RedisSubscriber(RedisStore):
         """
         Parse a message response sent by the Redis datastore on a subscribed channel.
         """
-        return self._subscription.parse_response()
+        return self._subscription.parse_response(block=False)
 
     def set_pubsub_channels(self, request, channels):
         """

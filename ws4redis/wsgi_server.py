@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys
+
+import logging
 import six
 from six.moves import http_client
 from redis import StrictRedis
@@ -8,7 +10,7 @@ if django.VERSION[:2] >= (1, 7):
     django.setup()
 from django.conf import settings
 from django.contrib.auth import get_user
-from django.core.handlers.wsgi import WSGIRequest, logger
+from django.core.handlers.wsgi import WSGIRequest
 from django.core.exceptions import PermissionDenied
 from django import http
 from django.utils.encoding import force_str
@@ -16,6 +18,8 @@ from django.utils.functional import SimpleLazyObject
 from ws4redis import settings as private_settings
 from ws4redis.redis_store import RedisMessage
 from ws4redis.exceptions import WebSocketError, HandshakeError, UpgradeRequiredError
+
+logger = logging.getLogger('django.request')
 
 try:
     # django >= 1.8 && python >= 2.7
@@ -25,6 +29,12 @@ except ImportError:
     # RemovedInDjango19Warning: django.utils.importlib will be removed in Django 1.9.
     from django.utils.importlib import import_module
 
+try:
+    # django >= 1.7
+    from django.utils.module_loading import import_string
+except ImportError:
+    # django >= 1.5
+    from django.utils.module_loading import import_by_path as import_string
 
 class WebsocketWSGIServer(object):
     def __init__(self, redis_connection=None):
@@ -83,7 +93,9 @@ class WebsocketWSGIServer(object):
         try:
             self.assure_protocol_requirements(environ)
             request = WSGIRequest(environ)
-            if callable(private_settings.WS4REDIS_PROCESS_REQUEST):
+            if isinstance(private_settings.WS4REDIS_PROCESS_REQUEST, six.string_types):
+                import_string(private_settings.WS4REDIS_PROCESS_REQUEST)(request)
+            elif callable(private_settings.WS4REDIS_PROCESS_REQUEST):
                 private_settings.WS4REDIS_PROCESS_REQUEST(request)
             else:
                 self.process_request(request)
@@ -107,7 +119,7 @@ class WebsocketWSGIServer(object):
             redis_fd = subscriber.get_file_descriptor()
             if redis_fd:
                 listening_fds.append(redis_fd)
-            subscriber.send_persited_messages(websocket)
+            subscriber.send_persisted_messages(websocket)
             recvmsg = None
             while websocket and not websocket.closed:
                 ready = self.select(listening_fds, [], [], 4.0)[0]
